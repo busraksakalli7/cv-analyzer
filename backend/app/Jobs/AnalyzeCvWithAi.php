@@ -3,13 +3,14 @@
 namespace App\Jobs;
 
 use App\Models\Document;
-use Spatie\PdfToText\Pdf;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Symfony\Component\Process\Process;
 
 class AnalyzeCvWithAi implements ShouldQueue
 
@@ -35,10 +36,28 @@ class AnalyzeCvWithAi implements ShouldQueue
 
         try {
             $executablePath = base_path('pdftotext.exe');
-            $fullPath = storage_path('app/private/' . $document->file_path);
+            $fullPath = storage_path('app/private/' . str_replace('/', DIRECTORY_SEPARATOR, $document->file_path));
 
-            // PDF Metnini sökme
-            $text = (new Pdf($executablePath))->setPdf($fullPath)->text();
+            if (!file_exists($executablePath)) {
+                throw new \RuntimeException("pdftotext.exe bulunamadı: {$executablePath}");
+            }
+
+            if (!file_exists($fullPath)) {
+                throw new \RuntimeException("PDF dosyası bulunamadı: {$fullPath}");
+            }
+
+            // Windows'ta spatie/pdf-to-text is_readable() yüzünden hata verebiliyor; Process doğrudan kullanılır.
+            $process = new Process([$executablePath, $fullPath, '-']);
+            $process->setTimeout(120);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                throw new \RuntimeException(
+                    'pdftotext hatası: ' . trim($process->getErrorOutput() ?: $process->getOutput())
+                );
+            }
+
+            $text = trim($process->getOutput());
             $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
 
             // Metni dökümana hemen kaydedelim
@@ -83,9 +102,18 @@ class AnalyzeCvWithAi implements ShouldQueue
                 'status' => 'completed'
             ]);
 
-        } catch (\Exception $e) {
-            // Eğer bir hata olursa döküman kilitli kalmasın, durumunu 'failed' yapalım
-            $document->update(['status' => 'failed']);
+        } catch (\Throwable $e) {
+            Log::error('CV analizi başarısız', [
+                'document_id' => $this->documentId,
+                'message' => $e->getMessage(),
+            ]);
+
+            $document->update([
+                'status' => 'failed',
+                'analysis_result' => [
+                    'error' => $e->getMessage(),
+                ],
+            ]);
         }
     }
 }

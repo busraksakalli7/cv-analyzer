@@ -5,9 +5,10 @@ export type DocumentStatus =
   | "failed";
 
 export type AnalysisResult = {
-  score: number;
-  summary: string;
-  questions: string[];
+  score?: number;
+  summary?: string;
+  questions?: string[];
+  error?: string;
 };
 
 export type CvDocument = {

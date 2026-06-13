@@ -143,7 +143,8 @@ export default function Home() {
 
       if (result.status === "failed") {
         setError(
-          "CV analizi tamamlanamadı. Queue worker ve Ollama servisini kontrol edin.",
+          result.analysis_result?.error ??
+            "CV analizi tamamlanamadı. Queue worker ve Ollama servisini kontrol edin.",
         );
       }
     } catch (submitError) {
@@ -342,7 +343,7 @@ export default function Home() {
         </aside>
       </div>
 
-      {document?.analysis_result && phase === "completed" && (
+      {document?.analysis_result && phase === "completed" && document.analysis_result.score != null && (
         <section className="card-surface mt-8 space-y-8 rounded-3xl p-6 sm:p-8">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
