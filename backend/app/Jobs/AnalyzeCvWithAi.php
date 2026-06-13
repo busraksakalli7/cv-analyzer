@@ -10,7 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Symfony\Component\Process\Process;
+use Smalot\PdfParser\Parser;
 
 class AnalyzeCvWithAi implements ShouldQueue
 
@@ -35,30 +35,19 @@ class AnalyzeCvWithAi implements ShouldQueue
         $document->update(['status' => 'processing']);
 
         try {
-            $executablePath = base_path('pdftotext.exe');
             $fullPath = storage_path('app/private/' . str_replace('/', DIRECTORY_SEPARATOR, $document->file_path));
-
-            if (!file_exists($executablePath)) {
-                throw new \RuntimeException("pdftotext.exe bulunamadı: {$executablePath}");
-            }
 
             if (!file_exists($fullPath)) {
                 throw new \RuntimeException("PDF dosyası bulunamadı: {$fullPath}");
             }
 
-            // Windows'ta spatie/pdf-to-text is_readable() yüzünden hata verebiliyor; Process doğrudan kullanılır.
-            $process = new Process([$executablePath, $fullPath, '-']);
-            $process->setTimeout(120);
-            $process->run();
+            // Harici pdftotext.exe yerine saf PHP parser — Windows DLL sorunlarını önler.
+            $text = (new Parser())->parseFile($fullPath)->getText();
+            $text = trim(mb_convert_encoding($text, 'UTF-8', 'UTF-8'));
 
-            if (!$process->isSuccessful()) {
-                throw new \RuntimeException(
-                    'pdftotext hatası: ' . trim($process->getErrorOutput() ?: $process->getOutput())
-                );
+            if ($text === '') {
+                throw new \RuntimeException('PDF dosyasından metin çıkarılamadı.');
             }
-
-            $text = trim($process->getOutput());
-            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
 
             // Metni dökümana hemen kaydedelim
             $document->update(['extracted_text' => $text]);
