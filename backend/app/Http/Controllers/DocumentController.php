@@ -35,6 +35,13 @@ class DocumentController extends Controller
         return response()->json([
             'message' => 'CV başarıyla alındı! Arka planda yapay zeka analizi başlatıldı.',
             'data'    => $document
-        ], 202); // 202 = Accepted (Kabul edildi, işleniyor anlamına gelen şık bir HTTP kodudur)
+        ], 202);
+    }
+
+    public function show(Document $document)
+    {
+        return response()->json([
+            'data' => $document,
+        ]);
     }
 }
